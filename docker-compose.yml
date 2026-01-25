@@ -1,0 +1,105 @@
+services:
+  # 1. Database
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - contrix_net
+
+  # 2. Redis (Message Queue)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - contrix_net
+
+  # 3. WAHA (WhatsApp API)
+  waha:
+    image: devlikeapro/waha:latest
+    restart: always
+    shm_size: 2g # Essential for Chrome/Puppeteer stability
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS  # Reverting to Real Engine
+      - WAHA_PRINT_QR=False
+      - WAHA_API_KEY=secret
+      - WAHA_DASHBOARD_USERNAME=admin
+      - WAHA_DASHBOARD_PASSWORD=ContrixAdmin123
+      - WHATSAPP_SWAGGER_USERNAME=admin
+      - WHATSAPP_SWAGGER_PASSWORD=ContrixAdmin123
+      # Persist sessions using Docker Volume (Better for Windows)
+    volumes:
+      - waha_data:/app/.waha
+    ports:
+      - "3000:3000"
+    networks:
+      - contrix_net
+
+  # 4. Backend API (Django)
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_NAME=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - contrix_net
+
+  # 5. Celery Worker (Background Tasks)
+  celery:
+    build: ./backend
+    command: celery -A contrix_backend worker -l info
+    volumes:
+      - ./backend:/app
+    environment:
+      - POSTGRES_NAME=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - contrix_net
+
+  # 6. Frontend (Next.js)
+  frontend:
+    build: ./frontend
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3001:3000" # Map host 3001 to container 3000
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - contrix_net
+
+volumes:
+  postgres_data:
+  waha_data:  # Named volume for better Windows compatibility
+
+networks:
+  contrix_net:
+    driver: bridge

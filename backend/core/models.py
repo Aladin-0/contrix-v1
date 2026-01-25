@@ -1,0 +1,130 @@
+import uuid
+from django.db import models
+from django.contrib.postgres.fields import ArrayField
+
+class TimeStampedModel(models.Model):
+    """Abstract base class with created/updated timestamps"""
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+class PhoneInstance(TimeStampedModel):
+    """Represents a connected WhatsApp session (Multi-session support)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, help_text="e.g., Primary Marketing Phone")
+    session_name = models.CharField(max_length=100, unique=True, help_text="Internal WAHA session ID")
+    is_primary = models.BooleanField(default=False)
+    
+    # Load Balancing
+    load_percentage = models.IntegerField(default=25, help_text="Percentage of traffic to route here (0-100)")
+    
+    # Status
+    STATUS_CHOICES = [
+        ('CONNECTED', 'Connected'),
+        ('DISCONNECTED', 'Disconnected'),
+        ('PAUSED', 'Paused'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DISCONNECTED')
+    
+    # Metrics
+    total_sent = models.IntegerField(default=0)
+    sent_today = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.name} ({self.session_name})"
+
+class Contact(models.Model):
+    """Customer database"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=50, unique=True)
+    
+    # Tags implemented as ArrayField (Postgres specific)
+    tags = ArrayField(models.CharField(max_length=50), blank=True, default=list)
+    
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active'),
+        ('UNSUBSCRIBED', 'Unsubscribed'),
+        ('BLOCKED', 'Blocked'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.phone}"
+
+class Property(TimeStampedModel):
+    """Real Estate Property Details"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    location = models.CharField(max_length=255)
+    bedrooms = models.IntegerField()
+    
+    # Photos as array of URLs
+    photos = ArrayField(models.URLField(), blank=True, default=list)
+
+    def __str__(self):
+        return self.title
+
+class Campaign(TimeStampedModel):
+    """Marketing Campaign wrapper"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    
+    # Many-to-Many: A campaign can have multiple properties
+    properties = models.ManyToManyField(Property, related_name='campaigns')
+    
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('QUEUED', 'Queued'),
+        ('RUNNING', 'Running'),
+        ('PAUSED', 'Paused'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
+    
+    # Stats
+    total_contacts = models.IntegerField(default=0)
+    total_groups = models.IntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+class CampaignSettings(models.Model):
+    """Specific configuration for a single campaign"""
+    campaign = models.OneToOneField(Campaign, on_delete=models.CASCADE, related_name='settings')
+    delay_between_messages_min = models.IntegerField(default=1, help_text="Min seconds delay")
+    delay_between_messages_max = models.IntegerField(default=10, help_text="Max seconds delay")
+    warmup_mode = models.BooleanField(default=False)
+    pause_every_x_messages = models.IntegerField(default=5, help_text="Pulse size")
+    pause_duration_seconds = models.IntegerField(default=30, help_text="Rest duration")
+    max_messages_per_hour = models.IntegerField(default=0, help_text="0 = Unlimited")
+
+class MessageLog(models.Model):
+    """Audit trail for every message sent"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    campaign = models.ForeignKey(Campaign, on_delete=models.SET_NULL, null=True)
+    phone_instance = models.ForeignKey(PhoneInstance, on_delete=models.SET_NULL, null=True)
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, null=True, blank=True)
+    
+    group_id = models.CharField(max_length=100, blank=True, null=True, help_text="If sent to a group")
+    property = models.ForeignKey(Property, on_delete=models.SET_NULL, null=True)
+    
+    message_text = models.TextField()
+    
+    STATUS_CHOICES = [
+        ('SENT', 'Sent'),
+        ('DELIVERED', 'Delivered'),
+        ('READ', 'Read'),
+        ('FAILED', 'Failed'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SENT')
+    error_message = models.TextField(blank=True, null=True)
+    sent_at = models.DateTimeField(auto_now_add=True)

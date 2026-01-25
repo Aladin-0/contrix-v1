@@ -1,0 +1,9 @@
+Django>=5.0,<6.0
+djangorestframework
+celery
+django-celery-results
+redis
+psycopg2-binary
+django-cors-headers
+requests
+gunicorn
