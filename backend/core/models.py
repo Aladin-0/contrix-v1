@@ -14,11 +14,13 @@ class PhoneInstance(TimeStampedModel):
     """Represents a connected WhatsApp session (Multi-session support)"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, help_text="e.g., Primary Marketing Phone")
-    session_name = models.CharField(max_length=100, unique=True, help_text="Internal WAHA session ID")
+    session_name = models.CharField(max_length=100, help_text="Internal WAHA session ID (default for WAHA Core)")
+
     is_primary = models.BooleanField(default=False)
     
     # Load Balancing
     load_percentage = models.IntegerField(default=25, help_text="Percentage of traffic to route here (0-100)")
+    api_url = models.CharField(max_length=255, default='http://waha:3000', help_text="WAHA API URL (e.g. http://waha:3000)")
     
     # Status
     STATUS_CHOICES = [
@@ -34,6 +36,19 @@ class PhoneInstance(TimeStampedModel):
 
     def __str__(self):
         return f"{self.name} ({self.session_name})"
+
+class WhatsAppGroup(TimeStampedModel):
+    """Synced WhatsApp Groups"""
+    phone_instance = models.ForeignKey(PhoneInstance, on_delete=models.CASCADE, related_name='groups')
+    group_id = models.CharField(max_length=100) # e.g. 1203630239@g.us
+    name = models.CharField(max_length=255)
+    participants_count = models.IntegerField(default=0)
+    
+    class Meta:
+        unique_together = ('phone_instance', 'group_id')
+
+    def __str__(self):
+        return self.name
 
 class Contact(models.Model):
     """Customer database"""
@@ -58,17 +73,13 @@ class Contact(models.Model):
 class Property(TimeStampedModel):
     """Real Estate Property Details"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=255)
-    description = models.TextField()
-    price = models.DecimalField(max_digits=12, decimal_places=2)
-    location = models.CharField(max_length=255)
-    bedrooms = models.IntegerField()
+    title = models.CharField(max_length=255, blank=True)
+    content = models.TextField(default='')
     
-    # Photos as array of URLs
-    photos = ArrayField(models.URLField(), blank=True, default=list)
+
 
     def __str__(self):
-        return self.title
+        return self.title or "Untitled Property"
 
 class Campaign(TimeStampedModel):
     """Marketing Campaign wrapper"""
@@ -77,6 +88,13 @@ class Campaign(TimeStampedModel):
     
     # Many-to-Many: A campaign can have multiple properties
     properties = models.ManyToManyField(Property, related_name='campaigns')
+    
+    # Group Targeting
+    target_groups = models.ManyToManyField(WhatsAppGroup, blank=True, related_name='campaigns')
+    send_to_all_groups = models.BooleanField(default=False)
+    
+    # Contact Targeting
+    send_to_all_contacts = models.BooleanField(default=True)
     
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
@@ -93,6 +111,11 @@ class Campaign(TimeStampedModel):
     total_groups = models.IntegerField(default=0)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Platform selection
+    send_to_whatsapp = models.BooleanField(default=True)
+    post_to_facebook = models.BooleanField(default=False)
+    post_to_instagram = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -100,8 +123,8 @@ class Campaign(TimeStampedModel):
 class CampaignSettings(models.Model):
     """Specific configuration for a single campaign"""
     campaign = models.OneToOneField(Campaign, on_delete=models.CASCADE, related_name='settings')
-    delay_between_messages_min = models.IntegerField(default=1, help_text="Min seconds delay")
-    delay_between_messages_max = models.IntegerField(default=10, help_text="Max seconds delay")
+    delay_between_messages_min = models.IntegerField(default=8, help_text="Min seconds delay")
+    delay_between_messages_max = models.IntegerField(default=12, help_text="Max seconds delay")
     warmup_mode = models.BooleanField(default=False)
     pause_every_x_messages = models.IntegerField(default=5, help_text="Pulse size")
     pause_duration_seconds = models.IntegerField(default=30, help_text="Rest duration")
@@ -113,9 +136,10 @@ class MessageLog(models.Model):
     campaign = models.ForeignKey(Campaign, on_delete=models.SET_NULL, null=True)
     phone_instance = models.ForeignKey(PhoneInstance, on_delete=models.SET_NULL, null=True)
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, null=True, blank=True)
-    
-    group_id = models.CharField(max_length=100, blank=True, null=True, help_text="If sent to a group")
+    group = models.ForeignKey(WhatsAppGroup, on_delete=models.SET_NULL, null=True, blank=True)
     property = models.ForeignKey(Property, on_delete=models.SET_NULL, null=True)
+    
+    waha_group_id = models.CharField(max_length=100, blank=True, null=True, help_text="Legacy/Dual store") 
     
     message_text = models.TextField()
     
@@ -127,4 +151,11 @@ class MessageLog(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SENT')
     error_message = models.TextField(blank=True, null=True)
+
+    PLATFORM_CHOICES = [
+        ('WHATSAPP', 'WhatsApp'),
+        ('FACEBOOK', 'Facebook'),
+        ('INSTAGRAM', 'Instagram'),
+    ]
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='WHATSAPP')
     sent_at = models.DateTimeField(auto_now_add=True)

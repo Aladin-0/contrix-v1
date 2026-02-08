@@ -21,12 +21,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-b2**51-z$wo-t6jc0^5qe+fjl59xgmpjy-+f=8=1#u=+w9jw$!'
+import os
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-b2**51-z$wo-t6jc0^5qe+fjl59xgmpjy-+f=8=1#u=+w9jw$!")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = int(os.environ.get("DEBUG", default=0))
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost 127.0.0.1").split(" ")
 
 
 # Application definition
@@ -129,6 +132,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -137,10 +143,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # CORS Settings (Allow Next.js frontend)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-]
+# CORS Settings (Allow Next.js frontend)
+CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000 http://localhost:3001").split(" ")
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "http://localhost:3000 http://localhost:3001").split(" ")
 
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
@@ -155,3 +160,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50
 }
+
+# Meta API Configuration (Facebook & Instagram)
+META_APP_ID = os.environ.get('META_APP_ID', '1634605851238506')
+META_APP_SECRET = os.environ.get('META_APP_SECRET', 'feb408ef1153acdb19324943d756380c')
+META_ACCESS_TOKEN = os.environ.get('META_ACCESS_TOKEN', 'EAAXOqlUcYGoBQl3x8pcnRcccHGB1GcsXJZBoz6kQbJZBot6wqgp3bIREOqX6tzeUy3MUPYHNYUKc5XbZCirPqRr0rUmkPN16xlOO69p84ZBwdv8P23dpTGXvVJoPAlnOCMEeBmZAeQGe6PnmCpJRqoYR3aSwwrnZBwcNYOAAWWZCNMKqpGa2JWItMsQLTlcu6f7EjODYEvAP4A59xB6')
+
+META_FACEBOOK_PAGE_ID = os.environ.get('META_FACEBOOK_PAGE_ID', '896981563508778')
+META_INSTAGRAM_ACCOUNT_ID = os.environ.get('META_INSTAGRAM_ACCOUNT_ID', '17841469655549878')
+META_API_VERSION = os.environ.get('META_API_VERSION', 'v19.0')
+
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'dcn1ie3jj')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '722898783948176')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', 'C2F4_qgtX91v67XWD1pcPzIdJSI')

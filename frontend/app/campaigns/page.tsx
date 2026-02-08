@@ -20,24 +20,42 @@ interface Campaign {
     name: string;
     status: string;
     total_contacts: number;
+    sent_count: number;
     properties: string[]; // List of IDs
 }
 
 export default function Campaigns() {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [properties, setProperties] = useState<Property[]>([]);
+    const [groups, setGroups] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
 
-    const [newCampaign, setNewCampaign] = useState({
+    interface NewCampaignState {
+        name: string;
+        propertyId: string;
+        target: string;
+        target_groups: string[];
+        send_to_whatsapp: boolean;
+        post_to_facebook: boolean;
+        post_to_instagram: boolean;
+        [key: string]: any; // fallback
+    }
+
+    const [newCampaign, setNewCampaign] = useState<NewCampaignState>({
         name: '',
         propertyId: '',
-        target: 'All Contacts', // Currently ignored by backend simple serializer but good for UI
+        target: 'All Contacts',
+        target_groups: [],
+        send_to_whatsapp: true,
+        post_to_facebook: false,
+        post_to_instagram: false,
     });
 
     useEffect(() => {
         fetchCampaigns();
         fetchProperties();
+        fetchGroups();
     }, []);
 
     const fetchCampaigns = async () => {
@@ -56,6 +74,14 @@ export default function Campaigns() {
         } catch (e) { console.error(e); }
     };
 
+    const fetchGroups = async () => {
+        try {
+            const res = await api.get('/groups/');
+            const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
+            setGroups(data);
+        } catch (e) { console.error(e); }
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -65,6 +91,14 @@ export default function Campaigns() {
                 name: newCampaign.name,
                 properties: [newCampaign.propertyId],
                 status: 'DRAFT',
+                send_to_whatsapp: newCampaign.send_to_whatsapp,
+                post_to_facebook: newCampaign.post_to_facebook,
+                post_to_instagram: newCampaign.post_to_instagram,
+
+                // Group targeting logic
+                send_to_all_groups: newCampaign.target === 'All Groups',
+                target_groups: newCampaign.target === 'Specific Groups' ? newCampaign.target_groups : [],
+
                 settings: {
                     delay_between_messages_min: 5,
                     delay_between_messages_max: 10,
@@ -74,14 +108,18 @@ export default function Campaigns() {
 
             fetchCampaigns();
             setShowCreate(false);
-            setNewCampaign({ name: '', propertyId: '', target: 'All Contacts' });
+            setNewCampaign({ name: '', propertyId: '', target: 'All Contacts', target_groups: [], send_to_whatsapp: true, post_to_facebook: false, post_to_instagram: false });
         } catch (error) {
             console.error("Error creating campaign", error);
             alert("Failed to create campaign");
         }
     };
 
+    const [processingId, setProcessingId] = useState<string | null>(null);
+
     const toggleStatus = async (id: string, currentStatus: string) => {
+        if (processingId === id) return; // Prevent double click
+        setProcessingId(id);
         try {
             if (currentStatus === 'RUNNING') {
                 await api.post(`/campaigns/${id}/pause/`);
@@ -92,6 +130,8 @@ export default function Campaigns() {
         } catch (error) {
             console.error("Error toggling status:", error);
             alert("Failed to update status. Check if campaign allows this transition.");
+        } finally {
+            setProcessingId(null);
         }
     };
 
@@ -129,6 +169,7 @@ export default function Campaigns() {
                                     placeholder="e.g. November Blast"
                                 />
                             </div>
+                            {/* Target Selection */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Select Property</label>
@@ -156,10 +197,77 @@ export default function Campaigns() {
                                         onChange={(e) => setNewCampaign({ ...newCampaign, target: e.target.value })}
                                     >
                                         <option value="All Contacts">All Contacts</option>
-                                        {/* Future: Support tagging logic */}
+                                        <option value="All Groups">All Groups (Broadcast)</option>
+                                        <option value="Specific Groups">Select Specific Groups</option>
                                     </select>
                                 </div>
                             </div>
+
+                            {/* Specific Group Selection */}
+                            {newCampaign.target === 'Specific Groups' && (
+                                <div className="space-y-2 p-4 bg-slate-50 rounded-md border text-sm">
+                                    <label className="font-semibold block mb-2">Select Groups:</label>
+                                    {groups.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                                            {groups.map((g: any) => (
+                                                <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newCampaign.target_groups.includes(g.id)}
+                                                        onChange={(e) => {
+                                                            const current = newCampaign.target_groups;
+                                                            if (e.target.checked) {
+                                                                setNewCampaign({ ...newCampaign, target_groups: [...current, g.id] });
+                                                            } else {
+                                                                setNewCampaign({ ...newCampaign, target_groups: current.filter(id => id !== g.id) });
+                                                            }
+                                                        }}
+                                                        className="rounded border-slate-300"
+                                                    />
+                                                    <span className="truncate" title={g.name}>{g.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-slate-500 italic">No groups found. Please sync groups in Phone Manager first.</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Platform Selection */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Send To:</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newCampaign.send_to_whatsapp}
+                                            onChange={(e) => setNewCampaign({ ...newCampaign, send_to_whatsapp: e.target.checked })}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">WhatsApp</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newCampaign.post_to_facebook}
+                                            onChange={(e) => setNewCampaign({ ...newCampaign, post_to_facebook: e.target.checked })}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">Facebook Page</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newCampaign.post_to_instagram}
+                                            onChange={(e) => setNewCampaign({ ...newCampaign, post_to_instagram: e.target.checked })}
+                                            className="h-4 w-4"
+                                        />
+                                        <span className="text-sm">Instagram</span>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div className="flex justify-end pt-2">
                                 <Button type="submit">Create Draft</Button>
                             </div>
@@ -195,26 +303,35 @@ export default function Campaigns() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {campaign.total_contacts}
+                                        <div className="flex flex-col gap-1 w-32">
+                                            <div className="flex justify-between text-xs text-slate-500">
+                                                <span>{campaign.sent_count || 0} / {campaign.total_contacts}</span>
+                                                <span>{campaign.total_contacts > 0 ? Math.round(((campaign.sent_count || 0) / campaign.total_contacts) * 100) : 0}%</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-blue-500 transition-all duration-500"
+                                                    style={{ width: `${campaign.total_contacts > 0 ? ((campaign.sent_count || 0) / campaign.total_contacts) * 100 : 0}%` }}
+                                                />
+                                            </div>
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {campaign.status !== 'COMPLETED' && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => toggleStatus(campaign.id, campaign.status)}
-                                                className="h-8 w-8"
-                                            >
-                                                {campaign.status === 'RUNNING' ? (
-                                                    <Pause className="h-4 w-4" />
-                                                ) : (
-                                                    <Play className="h-4 w-4" />
-                                                )}
-                                            </Button>
-                                        )}
-                                        {campaign.status === 'COMPLETED' && (
-                                            <CheckCircle2 className="ml-auto h-4 w-4 text-green-500" />
-                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => toggleStatus(campaign.id, campaign.status)}
+                                            disabled={processingId === campaign.id}
+                                            className="h-8 w-8"
+                                        >
+                                            {processingId === campaign.id ? (
+                                                <span className="animate-spin text-xl">⟳</span>
+                                            ) : campaign.status === 'RUNNING' ? (
+                                                <Pause className="h-4 w-4" />
+                                            ) : (
+                                                <Play className="h-4 w-4" />
+                                            )}
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}

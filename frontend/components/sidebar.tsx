@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Phone, Users, Megaphone, Home, FileText } from 'lucide-react';
+import { LayoutDashboard, Phone, Users, FileText, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const sidebarItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Broadcast', href: '/broadcast', icon: Send },
     { name: 'Phone System', href: '/phones', icon: Phone },
     { name: 'Contacts', href: '/contacts', icon: Users },
-    { name: 'Properties', href: '/properties', icon: Home },
-    { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
     { name: 'Message Logs', href: '/logs', icon: FileText },
 ];
 

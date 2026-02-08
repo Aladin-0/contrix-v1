@@ -25,20 +25,40 @@ services:
   waha:
     image: devlikeapro/waha:latest
     restart: always
-    shm_size: 2g # Essential for Chrome/Puppeteer stability
+    # IMPORTANT: Chrome needs shared memory to render QR codes
+    shm_size: 2g 
     environment:
-      - WHATSAPP_DEFAULT_ENGINE=WEBJS  # Reverting to Real Engine
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
       - WAHA_PRINT_QR=False
       - WAHA_API_KEY=secret
-      - WAHA_DASHBOARD_USERNAME=admin
-      - WAHA_DASHBOARD_PASSWORD=ContrixAdmin123
-      - WHATSAPP_SWAGGER_USERNAME=admin
-      - WHATSAPP_SWAGGER_PASSWORD=ContrixAdmin123
-      # Persist sessions using Docker Volume (Better for Windows)
+      # Add this to ensure the engine starts correctly
+      - WAHA_SESSION_TEMP_DIRECTORY=/app/.waha/temp
+      # Enable Store for Contacts/Groups
+      - WHATSAPP_NOWEB_STORE_ENABLED=True
+      - WAHA_NOWEB_STORE_ENABLED=True
+      - WHATSAPP_NOWEB_STORE_FULL_SYNC=True
+      - WAHA_NOWEB_STORE_FULL_SYNC=True
     volumes:
       - waha_data:/app/.waha
     ports:
       - "3000:3000"
+    networks:
+      - contrix_net
+
+  # 3b. WAHA 2 (Secondary Node)
+  waha2:
+    image: devlikeapro/waha:latest
+    restart: always
+    shm_size: 2g 
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
+      - WAHA_PRINT_QR=False
+      - WAHA_API_KEY=secret
+      - WAHA_SESSION_TEMP_DIRECTORY=/app/.waha/temp 
+    volumes:
+      - waha_data2:/app/.waha
+    ports:
+      - "3002:3000"
     networks:
       - contrix_net
 
@@ -98,7 +118,8 @@ services:
 
 volumes:
   postgres_data:
-  waha_data:  # Named volume for better Windows compatibility
+  waha_data:
+  waha_data2:
 
 networks:
   contrix_net:
