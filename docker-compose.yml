@@ -2,98 +2,83 @@ services:
   # 1. Database
   db:
     image: postgres:16
+    restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
+    env_file: .env
     networks:
       - contrix_net
 
-  # 2. Redis (Message Queue)
+  # 2. Redis
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: always
     networks:
       - contrix_net
 
-  # 3. WAHA (WhatsApp API)
+  # 3. WAHA Node 1 (Primary)
   waha:
     image: devlikeapro/waha:latest
     restart: always
-    # IMPORTANT: Chrome needs shared memory to render QR codes
-    shm_size: 2g 
+    shm_size: 2g
+    env_file: .env
     environment:
       - WHATSAPP_DEFAULT_ENGINE=NOWEB
       - WAHA_PRINT_QR=False
-      - WAHA_API_KEY=secret
-      # Add this to ensure the engine starts correctly
       - WAHA_SESSION_TEMP_DIRECTORY=/app/.waha/temp
-      # Enable Store for Contacts/Groups
       - WHATSAPP_NOWEB_STORE_ENABLED=True
       - WAHA_NOWEB_STORE_ENABLED=True
       - WHATSAPP_NOWEB_STORE_FULL_SYNC=True
       - WAHA_NOWEB_STORE_FULL_SYNC=True
     volumes:
       - waha_data:/app/.waha
-    ports:
-      - "3000:3000"
     networks:
       - contrix_net
 
-  # 3b. WAHA 2 (Secondary Node)
+  # 3b. WAHA Node 2 (Secondary) - NEW!
   waha2:
     image: devlikeapro/waha:latest
     restart: always
-    shm_size: 2g 
+    shm_size: 2g
+    env_file: .env
     environment:
       - WHATSAPP_DEFAULT_ENGINE=NOWEB
       - WAHA_PRINT_QR=False
-      - WAHA_API_KEY=secret
-      - WAHA_SESSION_TEMP_DIRECTORY=/app/.waha/temp 
+      - WAHA_SESSION_TEMP_DIRECTORY=/app/.waha/temp
+      - WHATSAPP_NOWEB_STORE_ENABLED=True
+      - WAHA_NOWEB_STORE_ENABLED=True
+      - WHATSAPP_NOWEB_STORE_FULL_SYNC=True
+      - WAHA_NOWEB_STORE_FULL_SYNC=True
     volumes:
       - waha_data2:/app/.waha
-    ports:
-      - "3002:3000"
     networks:
       - contrix_net
 
   # 4. Backend API (Django)
   backend:
-    build: ./backend
-    command: python manage.py runserver 0.0.0.0:8000
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: always
+    command: gunicorn contrix_backend.wsgi:application --bind 0.0.0.0:8000 --forwarded-allow-ips='*'
     volumes:
-      - ./backend:/app
-    ports:
-      - "8000:8000"
-    environment:
-      - POSTGRES_NAME=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_HOST=db
-      - REDIS_URL=${REDIS_URL}
+      - static_volume:/app/static
+      - media_volume:/app/media
+    env_file: .env
     depends_on:
       - db
       - redis
     networks:
       - contrix_net
 
-  # 5. Celery Worker (Background Tasks)
+  # 5. Celery Worker
   celery:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: always
     command: celery -A contrix_backend worker -l info
-    volumes:
-      - ./backend:/app
-    environment:
-      - POSTGRES_NAME=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - DB_HOST=db
-      - REDIS_URL=${REDIS_URL}
+    env_file: .env
     depends_on:
       - backend
       - redis
@@ -102,24 +87,55 @@ services:
 
   # 6. Frontend (Next.js)
   frontend:
-    build: ./frontend
-    command: npm run dev
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: https://contrix.zaikron.com/api
+    restart: always
+    env_file: .env
+    networks:
+      - contrix_net
+
+  # 7. Nginx (Reverse Proxy)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: always
     ports:
-      - "3001:3000" # Map host 3001 to container 3000
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - backend
+      - frontend
+    networks:
+      - contrix_net
+
+  # 8. Certbot (SSL)
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
       - contrix_net
 
 volumes:
   postgres_data:
   waha_data:
-  waha_data2:
+  waha_data2:  # <--- Added Volume
+  static_volume:
+  media_volume:
+  certbot_conf:
+  certbot_www:
 
 networks:
   contrix_net:

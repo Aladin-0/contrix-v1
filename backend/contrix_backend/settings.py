@@ -174,3 +174,18 @@ META_API_VERSION = os.environ.get('META_API_VERSION', 'v19.0')
 CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'dcn1ie3jj')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '722898783948176')
 CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', 'C2F4_qgtX91v67XWD1pcPzIdJSI')
+# ==============================================
+# SECURITY & PROXY FIXES (FORCE ADDED)
+# ==============================================
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# ==============================================
+# FINAL SECURITY OVERRIDE (REQUIRED FOR DJANGO 4+)
+# ==============================================
+CSRF_TRUSTED_ORIGINS = ['https://contrix.zaikron.com']
+CORS_ALLOWED_ORIGINS = ['https://contrix.zaikron.com']
+
+WAHA_API_KEY = os.environ.get('WAHA_API_KEY', '')

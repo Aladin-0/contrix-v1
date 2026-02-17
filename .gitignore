@@ -53,3 +53,23 @@ celerybeat-schedule
 
 # VS Code
 .vscode/
+certbot/
+*.deb
+*.save
+.env
+*.log
+certbot/
+*.deb
+*.save
+.env
+*.log
+certbot/
+*.deb
+*.save
+.env
+*.log
+certbot/
+*.deb
+*.save
+.env
+*.log
