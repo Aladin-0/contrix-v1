@@ -7,4 +7,10 @@ while ! nc -z db 5432; do
 done
 echo "PostgreSQL started"
 
+echo "Running migrations..."
+python manage.py migrate --noinput
+
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
 exec "$@"
