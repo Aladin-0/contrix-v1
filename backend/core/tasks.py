@@ -19,7 +19,23 @@ def send_waha_message(session_name, phone_number, message, api_url=WAHA_URL):
         # Allow group IDs like 120363@g.us
         chat_id = str(phone_number)
     else:
+        # Robust Sanitization for Individual Contacts
         clean_phone = ''.join(filter(str.isdigit, str(phone_number)))
+        
+        # Strip leading zeros (handle 098... or 0091...)
+        clean_phone = clean_phone.lstrip('0')
+        
+        if not clean_phone:
+            logger.warning(f"Skipping empty phone number: {phone_number}")
+            return False, "Invalid Phone Number"
+            
+        # Auto-correct common issues
+        if len(clean_phone) == 10:
+            clean_phone = '91' + clean_phone  # Default to India if missing
+        elif len(clean_phone) > 15:
+             # Too long? formatting issue? Log warning but try anyway
+             logger.warning(f"Suspicious phone number length: {clean_phone}")
+             
         chat_id = f"{clean_phone}@c.us"
 
     payload = {
@@ -93,7 +109,18 @@ def process_phone_queue(phone_id, campaign_id, contact_ids, property_ids, group_
 
         for prop in shuffled_properties:
             # Human mimic delay
-            delay = random.uniform(settings_obj.delay_between_messages_min, settings_obj.delay_between_messages_max)
+            min_delay = settings_obj.delay_between_messages_min
+            max_delay = settings_obj.delay_between_messages_max
+            
+            # WARMUP MODE: If enabled, we treat this as a "New/Risk" account
+            # We enforce a higher minimum delay and add extra variability
+            if settings_obj.warmup_mode:
+                 # Double the delays for safety
+                 min_delay = max(min_delay * 2, 20) # At least 20s
+                 max_delay = max(max_delay * 2, 40) # At least 40s
+            
+            delay = random.uniform(min_delay, max_delay)
+            logger.info(f"⏳ Waiting {delay:.1f}s (Warmup: {settings_obj.warmup_mode})...")
             time.sleep(delay)
 
             success, response = send_waha_message(
@@ -122,8 +149,13 @@ def process_phone_queue(phone_id, campaign_id, contact_ids, property_ids, group_
                 phone.save()
 
             # Pulse & Rest
-            if sent_count > 0 and sent_count % settings_obj.pause_every_x_messages == 0:
-                time.sleep(random.uniform(3, 6))
+            if sent_count > 0 and settings_obj.pause_every_x_messages > 0:
+                if sent_count % settings_obj.pause_every_x_messages == 0:
+                    # Use the configured pause duration with some jitter (+/- 20%)
+                    base_pause = settings_obj.pause_duration_seconds
+                    actual_pause = random.uniform(base_pause * 0.8, base_pause * 1.2)
+                    logger.info(f"😴 Batch Pause: Resting for {actual_pause:.1f}s after {sent_count} messages")
+                    time.sleep(actual_pause)
 
     check_campaign_completion.delay(campaign_id)
     return f"Phone {phone.name} finished. Sent: {sent_count}"
@@ -142,10 +174,21 @@ def start_campaign_task(campaign_id):
         campaign.save()
         return "No connected phones found."
 
+    # 3. Determine Recipients
+    # ---------------------------------------------------------
+    # Contacts
     contacts = []
-    if campaign.send_to_all_contacts:
+    if campaign.send_to_all_contacts and not campaign.target_tags:
+        # Default behavior: Send to ALL if no tags are specified and flag is true
         contacts = list(Contact.objects.filter(status='ACTIVE'))
-
+    elif campaign.target_tags:
+        # Tag-based filtering (OR logic: contact has ANY of the tags)
+        # Using Django's __overlap for ArrayField
+        if campaign.target_tags:
+             contacts = list(Contact.objects.filter(status='ACTIVE', tags__overlap=campaign.target_tags))
+    
+    # Groups
+    group_list = []
     properties = list(campaign.properties.all())
     if not properties:
         campaign.status = 'FAILED'

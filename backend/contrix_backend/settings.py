@@ -185,7 +185,7 @@ CSRF_COOKIE_SECURE = True
 # ==============================================
 # FINAL SECURITY OVERRIDE (REQUIRED FOR DJANGO 4+)
 # ==============================================
-CSRF_TRUSTED_ORIGINS = ['https://contrix.zaikron.com']
-CORS_ALLOWED_ORIGINS = ['https://contrix.zaikron.com']
+# CSRF_TRUSTED_ORIGINS = ['https://contrix.zaikron.com']
+# CORS_ALLOWED_ORIGINS = ['https://contrix.zaikron.com']
 
 WAHA_API_KEY = os.environ.get('WAHA_API_KEY', '')

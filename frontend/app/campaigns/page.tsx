@@ -99,11 +99,8 @@ export default function Campaigns() {
                 send_to_all_groups: newCampaign.target === 'All Groups',
                 target_groups: newCampaign.target === 'Specific Groups' ? newCampaign.target_groups : [],
 
-                settings: {
-                    delay_between_messages_min: 5,
-                    delay_between_messages_max: 10,
-                    max_messages_per_hour: 0
-                }
+                // Use backend defaults (Normal Mode: 8-12s delay, 30s rest)
+                settings: {}
             });
 
             fetchCampaigns();

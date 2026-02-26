@@ -156,11 +156,11 @@ export default function PhoneManager() {
             <Card className="max-w-2xl border-blue-100 shadow-sm">
                 <CardHeader><CardTitle className="text-[10px] font-bold uppercase text-blue-400 tracking-widest">Connect New Account</CardTitle></CardHeader>
                 <CardContent>
-                    <form onSubmit={handleConnect} className="flex gap-2 items-end">
+                    <form onSubmit={handleConnect} className="flex flex-col md:flex-row gap-2 items-stretch md:items-end">
                         <div className="flex-1 space-y-2">
                             <Input placeholder="Account Name (e.g. Marketing 1)" value={newPhoneName} onChange={(e) => setNewPhoneName(e.target.value)} />
                         </div>
-                        <div className="w-[200px] space-y-2">
+                        <div className="w-full md:w-[200px] space-y-2">
                             <select
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 value={selectedNode}
@@ -170,7 +170,7 @@ export default function PhoneManager() {
                                 <option value="http://waha2:3000">Node 2 (Secondary)</option>
                             </select>
                         </div>
-                        <Button type="submit" disabled={creating}>
+                        <Button type="submit" disabled={creating} className="w-full md:w-auto">
                             {creating ? <Loader2 className="animate-spin" /> : <><Plus className="w-4 h-4 mr-2" /> Link New</>}
                         </Button>
                     </form>

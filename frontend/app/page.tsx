@@ -89,7 +89,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Contacts</CardTitle>
@@ -128,53 +128,55 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
         {/* Recent Activity */}
-        <Card className="col-span-4">
+        <Card className="col-span-1 lg:col-span-4">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentLogs.length === 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">No recent activity.</TableCell>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Time</TableHead>
                   </TableRow>
-                ) : (
-                  recentLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-medium">{log.contact_phone || 'Unknown'}</TableCell>
-                      <TableCell className="truncate max-w-[200px]">{log.message_text}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${log.status === 'SENT' ? 'bg-blue-100 text-blue-800' :
+                </TableHeader>
+                <TableBody>
+                  {recentLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">No recent activity.</TableCell>
+                    </TableRow>
+                  ) : (
+                    recentLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="font-medium whitespace-nowrap">{log.contact_phone || 'Unknown'}</TableCell>
+                        <TableCell className="truncate max-w-[150px] md:max-w-[200px]">{log.message_text}</TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${log.status === 'SENT' ? 'bg-blue-100 text-blue-800' :
                             log.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
                               'bg-red-100 text-red-800'
-                          }`}>
-                          {log.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {new Date(log.sent_at).toLocaleTimeString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                            }`}>
+                            {log.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground whitespace-nowrap">
+                          {new Date(log.sent_at).toLocaleTimeString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
         {/* Campaign Progress */}
-        <Card className="col-span-3">
+        <Card className="col-span-1 lg:col-span-3">
           <CardHeader>
             <CardTitle>Active Campaigns</CardTitle>
           </CardHeader>

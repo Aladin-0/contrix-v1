@@ -12,6 +12,8 @@ interface MessageLog {
     id: string;
     campaign_name: string;
     contact_phone: string;
+    contact_name?: string;
+    contact_tags?: string[];
     status: string;
     error_message: string;
     sent_at: string;
@@ -21,9 +23,13 @@ interface MessageLog {
 export default function MessageLogs() {
     const [logs, setLogs] = useState<MessageLog[]>([]);
     const [loading, setLoading] = useState(false);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetchLogs();
+        fetchCategories();
     }, []);
 
     const fetchLogs = async () => {
@@ -39,6 +45,26 @@ export default function MessageLogs() {
         }
     };
 
+    const fetchCategories = async () => {
+        try {
+            const res = await api.get('/contact-categories/');
+            const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
+            setCategories(data.map((c: any) => c.name));
+        } catch (e) { }
+    };
+
+    // Filter Logic
+    const filteredLogs = logs.filter(log => {
+        const matchesSearch =
+            (log.contact_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (log.contact_phone?.includes(searchTerm)) ||
+            (log.campaign_name?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        const matchesCategory = selectedCategory === 'all' || (log.contact_tags && log.contact_tags.includes(selectedCategory));
+
+        return matchesSearch && matchesCategory;
+    });
+
     return (
         <div className="space-y-6">
             <div>
@@ -48,11 +74,32 @@ export default function MessageLogs() {
 
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle>History</CardTitle>
-                        <div className="relative w-64">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500" />
-                            <Input placeholder="Search logs..." className="pl-8" />
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <CardTitle className="hidden md:block">History</CardTitle>
+
+                        <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                            {/* Category Filter */}
+                            <select
+                                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                            >
+                                <option value="all">All Categories</option>
+                                {categories.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+
+                            {/* Search */}
+                            <div className="relative w-full md:w-64">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500" />
+                                <Input
+                                    placeholder="Search name, phone..."
+                                    className="pl-8"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
                         </div>
                     </div>
                 </CardHeader>
@@ -60,10 +107,10 @@ export default function MessageLogs() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Time</TableHead>
-                                <TableHead>Platform</TableHead>
+                                <TableHead>Time (IST)</TableHead>
+                                <TableHead>Contact</TableHead>
+                                <TableHead>Category</TableHead>
                                 <TableHead>Campaign</TableHead>
-                                <TableHead>To</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Details</TableHead>
                             </TableRow>
@@ -73,22 +120,31 @@ export default function MessageLogs() {
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
                                 </TableRow>
-                            ) : logs.map((log) => (
+                            ) : filteredLogs.map((log) => (
                                 <TableRow key={log.id}>
-                                    <TableCell className="text-xs text-slate-500">
-                                        {new Date(log.sent_at).toLocaleString()}
+                                    <TableCell className="text-xs text-slate-500 whitespace-nowrap">
+                                        {new Date(log.sent_at).toLocaleString('en-IN', {
+                                            timeZone: 'Asia/Kolkata',
+                                            day: '2-digit', month: 'short',
+                                            hour: '2-digit', minute: '2-digit', hour12: true
+                                        })}
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={
-                                            log.platform === 'FACEBOOK' ? 'border-blue-500 text-blue-500' :
-                                                log.platform === 'INSTAGRAM' ? 'border-pink-500 text-pink-500' :
-                                                    'border-green-500 text-green-500'
-                                        }>
-                                            {log.platform || 'WHATSAPP'}
-                                        </Badge>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">{log.contact_name || 'Unknown'}</span>
+                                            <span className="text-xs text-slate-400 font-mono">{log.contact_phone}</span>
+                                        </div>
                                     </TableCell>
-                                    <TableCell>{log.campaign_name}</TableCell>
-                                    <TableCell>{log.contact_phone || 'Page/Feed'}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-wrap gap-1">
+                                            {log.contact_tags && log.contact_tags.length > 0 ? log.contact_tags.map((tag: string) => (
+                                                <span key={tag} className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] border">
+                                                    {tag}
+                                                </span>
+                                            )) : <span className="text-slate-300 text-xs">-</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-sm text-slate-600">{log.campaign_name}</TableCell>
                                     <TableCell>
                                         <Badge variant={
                                             log.status === 'SENT' ? 'default' :
@@ -101,7 +157,7 @@ export default function MessageLogs() {
                                     </TableCell>
                                 </TableRow>
                             ))}
-                            {!loading && logs.length === 0 && (
+                            {!loading && filteredLogs.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center">No logs found.</TableCell>
                                 </TableRow>

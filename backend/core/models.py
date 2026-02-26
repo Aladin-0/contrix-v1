@@ -50,6 +50,27 @@ class WhatsAppGroup(TimeStampedModel):
     def __str__(self):
         return self.name
 
+class GroupCollection(TimeStampedModel):
+    """Collection of WhatsApp Groups for easier targeting"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    group_ids = ArrayField(models.CharField(max_length=100), blank=True, default=list, help_text="List of WhatsApp Group JIDs (e.g. 12345@g.us)")
+
+    def __str__(self):
+        return f"{self.name} ({len(self.group_ids)} groups)"
+
+class ContactCategory(TimeStampedModel):
+    """User-defined categories for contacts (e.g. Broker, Builder)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class Contact(models.Model):
     """Customer database"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -92,6 +113,9 @@ class Campaign(TimeStampedModel):
     # Group Targeting
     target_groups = models.ManyToManyField(WhatsAppGroup, blank=True, related_name='campaigns')
     send_to_all_groups = models.BooleanField(default=False)
+    
+    # Tag Targeting (Category-based)
+    target_tags = ArrayField(models.CharField(max_length=50), blank=True, default=list, help_text="List of tags to target (e.g. ['Builder', 'Broker'])")
     
     # Contact Targeting
     send_to_all_contacts = models.BooleanField(default=True)
